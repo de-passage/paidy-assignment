@@ -33,7 +33,7 @@ macro_rules! add_path{
     }
 }
 
-fn router() -> errors::Result<Router<&'static str>> {
+pub fn router() -> errors::Result<Router<&'static str>> {
     let mut router = Router::new();
     add_path!(router, ORDERS, ORDER_BY_ID, ITEMS, ITEM_BY_ID,);
     Ok(router)
