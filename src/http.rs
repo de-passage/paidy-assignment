@@ -336,7 +336,10 @@ mod test {
             for _ in 1..10 {
                 match HttpClient::new(ADDR) {
                     Ok(c) => return Some(c),
-                    Err(err) => eprintln!("Trying to connect to {}: {}", ADDR, err),
+                    Err(err) => {
+                        eprintln!("Trying to connect to {}: {}", ADDR, err);
+                        std::thread::sleep(std::time::Duration::from_millis(10));
+                    },
                 }
             }
             None

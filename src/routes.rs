@@ -26,7 +26,7 @@ make_paths! {
 }
 
 macro_rules! add_path{
-    ($router:ident, $($path:ident,)*) => {
+    ($router:ident $(, $path:ident)*) => {
         $(
             $router.insert(paths::$path, endpoints::$path)?;
         )*
@@ -35,7 +35,7 @@ macro_rules! add_path{
 
 pub fn router() -> errors::Result<Router<&'static str>> {
     let mut router = Router::new();
-    add_path!(router, ORDERS, ORDER_BY_ID, ITEMS, ITEM_BY_ID,);
+    add_path!(router, ORDERS, ORDER_BY_ID, ITEMS, ITEM_BY_ID);
     Ok(router)
 }
 
