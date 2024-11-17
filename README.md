@@ -29,7 +29,7 @@ The output is very crude, I lacked the time to do something pretty (see below).
 ## API
 
 ### Creating a new order
-```json
+```typescript
 POST /orders
 Request:
 {
@@ -50,7 +50,7 @@ Response:
 ```
 
 ### Querying the orders for a table
-```json
+```typescript
 GET /orders/<table_number>
 Request: None
 Response: {
@@ -66,7 +66,7 @@ Response: {
 ```
 
 ### Querying a single item
-```json
+```typescript
 GET /orders/<table_number>/items/<item_id>
 Request: None
 Response: {
@@ -77,7 +77,7 @@ Response: {
 ```
 
 ### Deleting an item
-```json
+```typescript
 DELETE /orders/<table_number>/items/<item_id>
 Request: None
 Response: {
