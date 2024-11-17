@@ -14,7 +14,6 @@ pub struct Item {
     pub id: u32,
 }
 
-
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Order {
     pub table_number: u32,

@@ -40,6 +40,32 @@ macro_rules! add_path{
     }
 }
 
+pub mod params {
+    pub const ORDER_ID: &str = "order_id";
+    pub const ITEM_ID: &str = "item_id";
+}
+
+// spurious warning, I am using this in tests
+#[allow(unused_macros)]
+macro_rules! make_params {
+    () => {
+        std::collections::HashMap::new()
+    };
+    ($name:ident: $value:expr $(, $name2:ident: $value2:expr)* ) => {
+        {
+            let mut map = std::collections::HashMap::new();
+            map.insert(params::$name.to_string(), $value.to_string());
+            $(
+                map.insert(params::$name2.to_string(), $value2.to_string());
+            )*
+            map
+        }
+        }
+    }
+
+#[allow(unused_imports)]
+pub(crate) use make_params;
+
 fn router() -> errors::Result<Router<&'static str>> {
     let mut router = Router::new();
     add_path!(router, ORDERS, ORDER_BY_ID, ITEMS, ITEM_BY_ID);
@@ -142,6 +168,13 @@ mod test {
     }
 
     #[test]
+    fn test_make_params() {
+        let params = make_params!(ORDER_ID : "1", ITEM_ID : "2");
+        assert_eq!(params.get(params::ORDER_ID).unwrap(), "1");
+        assert_eq!(params.get(params::ITEM_ID).unwrap(), "2");
+    }
+
+    #[test]
     fn test_router() {
         const EXPECTED_GET_ORDER: &str = "get_orders";
         const EXPECTED_POST_ORDER: &str = "post_orders";
@@ -190,7 +223,10 @@ mod test {
         });
 
         let response = router
-            .route(Request::post("/api/v1/orders/42/items/24", "".to_string()), &mut db)
+            .route(
+                Request::post("/api/v1/orders/42/items/24", "".to_string()),
+                &mut db,
+            )
             .unwrap();
 
         assert_eq!(response.body, "42:24");

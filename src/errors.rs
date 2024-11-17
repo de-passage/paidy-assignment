@@ -6,6 +6,7 @@ pub enum Error {
     NoResponse,
     NotFound(String),
     BadRequest(String),
+    InternalServerError(String),
 }
 
 impl std::fmt::Display for Error {
@@ -14,6 +15,7 @@ impl std::fmt::Display for Error {
             Error::NoResponse => write!(f, "No response from server"),
             Error::NotFound(err) => write!(f, "Not found: {}", err),
             Error::BadRequest(err) => write!(f, "Bad Request: {}", err),
+            Error::InternalServerError(err) => write!(f, "InternalServerError: {}", err),
         }
     }
 }

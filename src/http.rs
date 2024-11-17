@@ -11,6 +11,14 @@ pub struct Request {
 }
 
 impl Request {
+    pub fn new(method: &str, path: &str, headers: Vec<(String, String)>, body: String) -> Request {
+        Request {
+            method: method.to_string(),
+            path: path.to_string(),
+            headers,
+            body,
+        }
+    }
     pub fn get(path: &str) -> Request {
         Request {
             method: "GET".to_string(),
