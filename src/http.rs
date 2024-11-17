@@ -10,6 +10,33 @@ pub struct Request {
     pub body: String,
 }
 
+impl Request {
+    pub fn get(path: &str) -> Request {
+        Request {
+            method: "GET".to_string(),
+            body: "".to_string(),
+            headers: vec![],
+            path: path.to_string(),
+        }
+    }
+    pub fn post(path: &str, body: String) -> Request {
+        Request {
+            method: "POST".to_string(),
+            body,
+            headers: vec![],
+            path: path.to_string(),
+        }
+    }
+    pub fn delete(path: &str, body: String) -> Request {
+        Request {
+            method: "DELETE".to_string(),
+            body,
+            headers: vec![],
+            path: path.to_string(),
+        }
+    }
+}
+
 fn parse_request<T>(mut buf_reader: BufReader<T>) -> std::option::Option<Request>
 where
     T: Sized + Read,
@@ -76,9 +103,17 @@ pub struct Response {
 impl Response {
     pub fn ok() -> Response {
         Response {
-            status: Some(200),
+            status: Some(204),
             headers: vec![],
             body: "".to_string(),
+        }
+    }
+
+    pub fn ok_with_body(str: String) -> Response {
+        Response {
+            status: Some(200),
+            headers: vec![],
+            body: str,
         }
     }
 }
@@ -165,6 +200,7 @@ fn from_code(code: u16) -> &'static str {
     match code {
         400 => "Bad Request",
         200 => "OK",
+        204 => "No Content",
         500 => "Internal Server Error",
         c => panic!("Missing string for code {}", c),
     }
@@ -318,10 +354,10 @@ mod test {
     #[test]
     fn test_simple_http_request() {
         // I normally would not do this kind of tests here but time is short
-        // It may fail if started several times in a row since the OS takes some time
-        // to make the port available again. If I get around to it I'll extract this into
-        // something cleaner
-        static ADDR: &str = "127.0.0.1:1422";
+        // It may fail if started several times in a row since the OS may takes some time
+        // to make the port available again (or if it is already in use by something else)
+        // . If I get around to it I'll extract this into something cleaner
+        static ADDR: &str = "127.0.0.1:18422";
 
         let handle = std::thread::spawn(|| {
             eprintln!("Connecting to {}", ADDR);
@@ -339,7 +375,7 @@ mod test {
                     Err(err) => {
                         eprintln!("Trying to connect to {}: {}", ADDR, err);
                         std::thread::sleep(std::time::Duration::from_millis(10));
-                    },
+                    }
                 }
             }
             None
@@ -350,7 +386,7 @@ mod test {
             .send("POST", "/", "{\"content\": \"Hello\"}")
             .expect("Failed to communicate with server");
 
-        assert_eq!(resp.status.unwrap(), 200);
+        assert_eq!(resp.status.unwrap(), 204);
 
         handle.join().unwrap();
     }

@@ -50,7 +50,7 @@ pub mod mock {
                 .collect();
 
             if items.is_empty() {
-                Err(Error::NotFound.into())
+                Err(Error::NotFound(format!("No orders for table {}", table_id)).into())
             } else {
                 Ok(Order {
                     items,
@@ -64,12 +64,19 @@ pub mod mock {
                 .iter()
                 .find(|(id, item)| *id == table_id && item.id == order_id as u32)
                 .map(|(_, item)| item.clone())
-                .ok_or(Error::NotFound.into())
+                .ok_or(
+                    Error::NotFound(format!(
+                        "No item with id {} for table {}",
+                        order_id, table_id
+                    ))
+                    .into(),
+                )
         }
 
         fn delete_order(&mut self, table_id: u32, order_id: u32) -> bool {
             let old_len = self.0.len();
-            self.0.retain(|(id, item)| *id != table_id || item.id != order_id as u32);
+            self.0
+                .retain(|(id, item)| *id != table_id || item.id != order_id as u32);
 
             old_len != self.0.len()
         }
