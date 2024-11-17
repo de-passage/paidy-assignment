@@ -5,6 +5,7 @@ use common::routes;
 use common::cli::*;
 use serde;
 
+/// Actions that may be performed by the client
 #[derive(Debug)]
 enum Action {
     Get,
@@ -12,6 +13,7 @@ enum Action {
     Delete,
 }
 
+/// Command line options
 #[derive(Debug)]
 struct CLIOptions {
     target: String,
@@ -20,6 +22,7 @@ struct CLIOptions {
     orders: Vec<String>,
 }
 
+/// Transform the given string into an Action
 fn parse_action(action: String) -> std::result::Result<Action, CLIError> {
     match action.to_ascii_lowercase().as_str() {
         "get" => Ok(Action::Get),
@@ -29,6 +32,13 @@ fn parse_action(action: String) -> std::result::Result<Action, CLIError> {
     }
 }
 
+/// Parse the given iterator to get the command line options.
+///
+/// This function is only concerned with getting the common options and sorting them meaningfully
+/// in the CLIOptions struct. It does not yield an error if the target is invalid, or if there are
+/// no parameters for the action.
+///
+/// It acts on an iterator to allow for unit testing. Which I'll do at some point
 fn parse_cli_args<I>(mut args: I) -> Result<CLIOptions>
 where
     I: Iterator<Item = String>,
@@ -38,7 +48,7 @@ where
         .next()
         .ok_or(CLIError::MissingParameter("target or action"))?;
 
-    let (target, action) = match validate_url(&maybe_target.as_str()) {
+    let (target, action) = match validate_address(&maybe_target.as_str()) {
         Ok(target) => (
             target,
             args.next()
@@ -72,6 +82,9 @@ where
     })
 }
 
+/// Primitive pretty-print of the responses.
+///
+/// The JSON body is dumped on the console for now.
 fn print_response<'a, Body>(response: &'a Response)
 where
     Body: serde::Deserialize<'a> + std::fmt::Debug,

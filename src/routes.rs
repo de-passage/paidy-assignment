@@ -5,9 +5,11 @@ use crate::{
     errors,
     http::{Request, Response},
 };
-use errors::Result;
+use errors::{Result, Error};
 use matchit::Router;
 
+/// Utility macro generating a constant for the HTTP endpoint, and associate it with
+/// an identifier. Matchit requires both
 macro_rules! make_paths {
         ($($name:ident: $path:expr,)*) => {
 
@@ -32,6 +34,7 @@ make_paths! {
     ITEM_BY_ID: "/orders/{order_id}/items/{item_id}",
 }
 
+/// Utility to add a list of paths to the router automatically
 macro_rules! add_path{
     ($router:ident $(, $path:ident)*) => {
         $(
@@ -40,23 +43,32 @@ macro_rules! add_path{
     }
 }
 
+/// Names of the parameters in the HTTP paths, used to extract them
+/// from the parameters inside of request handling
+pub mod params {
+    /// Key of order ids in HTTP paths
+    pub const ORDER_ID: &str = "order_id";
+
+    /// Key of item ids in HTTP paths
+    pub const ITEM_ID: &str = "item_id";
+}
+
+/// Return the HTTP path for an order based on its id
 pub fn order_by_id(order_id: u32) -> String {
     paths::ORDER_BY_ID.replace("{order_id}", &order_id.to_string())
 }
 
+/// Return the HTTP path for an item based on its order id and item id
 pub fn item_by_id(order_id: u32, item_id: u32) -> String {
     paths::ITEM_BY_ID
         .replace("{order_id}", &order_id.to_string())
         .replace("{item_id}", &item_id.to_string())
 }
 
-pub mod params {
-    pub const ORDER_ID: &str = "order_id";
-    pub const ITEM_ID: &str = "item_id";
-}
 
 // spurious warning, I am using this in tests
 #[allow(unused_macros)]
+/// Utility to create easily hashmaps of parameters for testing
 macro_rules! make_params {
     () => {
         std::collections::HashMap::new()
@@ -76,42 +88,65 @@ macro_rules! make_params {
 #[allow(unused_imports)]
 pub(crate) use make_params;
 
-fn router() -> errors::Result<Router<&'static str>> {
+/// Create a new router with the paths defined in this module
+///
+/// Errors from this functions are programming errors, most likely steming from a
+/// misuse of matchit
+/// TODO: refactor this to separate generic functions and data types and those specific to this
+/// application
+fn new_router() -> errors::Result<Router<&'static str>> {
     let mut router = Router::new();
     add_path!(router, ORDERS, ORDER_BY_ID, ITEMS, ITEM_BY_ID);
     Ok(router)
 }
 
+/// Type of the object containing the HTTP path parameters passed to handlers
 pub type HttpParams = HashMap<String, String>;
+/// Type of the function that handles HTTP requests
 pub type HttpHandler = fn(Request, HttpParams, &mut dyn Database) -> Result<Response>;
-type MethodToHandler = HashMap<&'static str, HttpHandler>;
 
+/// The router is in charge of taking in raw HTTP requests and to dispatch them to
+/// the appropriate handler function.
 pub struct HttpRouter {
     routes: Router<&'static str>,
-    handlers: HashMap<&'static str, MethodToHandler>,
+    handlers: HashMap<&'static str, HashMap<&'static str, HttpHandler>>,
 }
 
 impl HttpRouter {
+    /// Creates a new empty router
+    ///
+    /// Although the matchit router is not empty, there are no methods associated
+    /// to the routes yet, so no request can be processed
+    /// Errors in this function are programming errors.
     pub fn new() -> Result<Self> {
-        let routes = router()?;
+        let routes = new_router()?;
         Ok(HttpRouter {
             routes,
             handlers: HashMap::new(),
         })
     }
 
+    /// Add a new route to the router
     pub fn add_route(&mut self, method: &'static str, route: &'static str, handler: HttpHandler) {
         let method_to_handler = self.handlers.entry(route).or_insert_with(HashMap::new);
         method_to_handler.insert(method, handler);
     }
 
+    /// Sends a request to the appropriate handler if it exists
+    ///
+    /// If there is a route matching the request, its handler will be called and the result of the
+    /// function will be the result of the handler. If no route is defined for this request,
+    /// return Error::NotFound
+    ///
+    /// Checking that all parameters are presents and that the body is correct is the
+    /// responsibility of the handler
     pub fn route(&self, request: Request, db: &mut dyn Database) -> Result<Response> {
         let route = self
             .routes
             .at(&request.path)
             .map_err(|err| errors::Error::NotFound(err.to_string()))?;
         let method_to_handler = self.handlers.get(route.value).ok_or_else(|| {
-            errors::Error::NotFound(format!(
+            Error::NotFound(format!(
                 "No method associated to this route: {}",
                 route.value
             ))
@@ -119,7 +154,7 @@ impl HttpRouter {
         let handler = method_to_handler
             .get(request.method.as_str())
             .ok_or_else(|| {
-                errors::Error::NotFound(format!(
+                Error::NotFound(format!(
                     "No handler for {} {}",
                     request.method.as_str(),
                     route.value
@@ -142,7 +177,7 @@ mod test {
 
     #[test]
     fn test_routes() {
-        let router = router().unwrap();
+        let router = new_router().unwrap();
         assert_eq!(
             *router.at("/api/v1/orders").unwrap().value,
             endpoints::ORDERS
@@ -163,7 +198,7 @@ mod test {
 
     #[test]
     fn test_route_ids() {
-        let router = router().unwrap();
+        let router = new_router().unwrap();
         let route = router.at("/api/v1/orders/1/items/2").unwrap();
         let params = route.params;
         assert_eq!(params.get("order_id"), Some("1"));
@@ -172,7 +207,7 @@ mod test {
 
     #[test]
     fn test_missing_routes() {
-        let router = router().unwrap();
+        let router = new_router().unwrap();
         assert!(router.at("/api/v1/missing").is_err());
         assert!(router.at("/api/v2/orders/1").is_err());
     }

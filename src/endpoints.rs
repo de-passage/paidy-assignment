@@ -4,6 +4,10 @@ use crate::errors::{Error, Result};
 use crate::http::{Request, Response};
 use crate::routes::*;
 
+/// Create the router for the HTTP server.
+///
+/// This is where we define the associations between the HTTP methods and the handlers.
+/// Nothing in this function should fail if the application is correctly implemented,
 pub fn create_http_router() -> Result<HttpRouter> {
     let mut router = HttpRouter::new()?;
 
@@ -15,6 +19,7 @@ pub fn create_http_router() -> Result<HttpRouter> {
     Ok(router)
 }
 
+/// Extract a numeric identifier from the request parameters
 fn get_id(params: &HttpParams, key: &str) -> Result<u32> {
     params
         .get(key)
@@ -26,10 +31,14 @@ fn get_id(params: &HttpParams, key: &str) -> Result<u32> {
         .map_err(|err| err.into())
 }
 
+/// Serialize a value to a JSON string,
+///
+/// Returns an InternalServerError if it fails, as this would be a programming error.
 fn serialize<T: serde::Serialize>(data: T) -> Result<String> {
     serde_json::to_string(&data).map_err(|err| Error::InternalServerError(err.to_string()).into())
 }
 
+/// Handle requests for creation of a new order
 fn new_order(req: Request, _: HttpParams, db: &mut dyn Database) -> Result<Response> {
     let body = serde_json::from_str::<NewOrder>(&req.body)
         .map_err(|err| Error::BadRequest(err.to_string()))?;
@@ -44,6 +53,7 @@ fn new_order(req: Request, _: HttpParams, db: &mut dyn Database) -> Result<Respo
         .and_then(Ok)
 }
 
+/// Handle requests for the items associated to an order (table id)
 fn get_items(_: Request, params: HttpParams, db: &mut dyn Database) -> Result<Response> {
     let order_id = get_id(&params, params::ORDER_ID)?;
 
@@ -53,6 +63,7 @@ fn get_items(_: Request, params: HttpParams, db: &mut dyn Database) -> Result<Re
         .and_then(Ok)
 }
 
+/// Handle requests to fetch a specific item
 fn get_order_item(_: Request, params: HttpParams, db: &mut dyn Database) -> Result<Response> {
     let order_id = get_id(&params, params::ORDER_ID)?;
     let item_id = get_id(&params, params::ITEM_ID)?;
@@ -62,11 +73,13 @@ fn get_order_item(_: Request, params: HttpParams, db: &mut dyn Database) -> Resu
         .map(Response::ok_with_body)
         .and_then(Ok)
 }
+
+/// Handle requests to delete an item from a table order
 fn delete_order_item(_: Request, params: HttpParams, db: &mut dyn Database) -> Result<Response> {
     let order_id = get_id(&params, params::ORDER_ID)?;
     let item_id = get_id(&params, params::ITEM_ID)?;
 
-    db.delete_order(order_id, item_id)
+    db.delete_item(order_id, item_id)
         .and_then(&serialize)
         .map(Response::ok_with_body)
         .and_then(Ok)
@@ -81,9 +94,6 @@ mod tests {
         serde_json::from_str(&resp.body).map_err(|e| e.into())
     }
     fn to_order(resp: &Response) -> Result<Order> {
-        serde_json::from_str(&resp.body).map_err(|e| e.into())
-    }
-    fn to_items(resp: &Response) -> Result<Vec<Item>> {
         serde_json::from_str(&resp.body).map_err(|e| e.into())
     }
 
@@ -150,10 +160,11 @@ mod tests {
         )
         .unwrap();
 
-        let order = to_items(&response).unwrap();
-        assert_eq!(order.len(), 2);
-        assert!(order.iter().find(|i| i.name == "Pizza").is_some());
-        assert!(order.iter().find(|i| i.name == "Burger").is_some());
+        let order = to_order(&response).unwrap();
+        assert_eq!(order.table_number, 1);
+        assert_eq!(order.items.len(), 2);
+        assert!(order.items.iter().find(|i| i.name == "Pizza").is_some());
+        assert!(order.items.iter().find(|i| i.name == "Burger").is_some());
     }
 
     #[test]

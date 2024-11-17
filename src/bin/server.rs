@@ -8,11 +8,13 @@ use std::sync::{Arc, Mutex};
 fn main() {
     let addr = std::env::args()
         .nth(1)
-        .unwrap_or_else(|| cli::DEFAULT_ADDRESS.to_string());
+        .unwrap_or(cli::DEFAULT_ADDRESS.to_string());
+
     let server = HttpServer::new(&addr).unwrap();
     let router = Arc::new(endpoints::create_http_router().unwrap());
     let db = Arc::new(Mutex::new(MockDB::new().unwrap()));
-    server.serve(|request| {
+
+    server.serve(move |request| {
         println!("{:?}", request);
         let result = db
             .lock()
@@ -22,7 +24,8 @@ fn main() {
         let response = match result {
             Ok(response) => response,
             Err(err) => {
-                eprintln!("Error processing request: {:?}", &err);
+                eprintln!("Error processing request: {:?}", &err); // can't downcast without moving
+                                                                   // apparently
                 if let Ok(err) = err.downcast::<common::errors::Error>() {
                     match *err {
                         Error::NotFound(_) => Response::error(404),

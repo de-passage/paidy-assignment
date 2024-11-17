@@ -1,11 +1,21 @@
+/// Type alias to simplify conversions where necessary
 pub type BoxedError = Box<dyn std::error::Error>;
+
+/// The general Result type used throughout the application
 pub type Result<T> = std::result::Result<T, BoxedError>;
 
+/// Application error types
+///
+/// This is mixing server-side and client-side errors, which is not ideal.
 #[derive(Debug)]
 pub enum Error {
+    /// An HTTP request didn't get a response from the server
     NoResponse,
+    /// The requested resource (path or object) doesn't exist
     NotFound(String),
+    /// Incoming request is malformed or incoherent with the server's expectations
     BadRequest(String),
+    /// Something went wrong server-side
     InternalServerError(String),
 }
 
