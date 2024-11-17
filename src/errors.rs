@@ -5,6 +5,7 @@ pub type Result<T> = std::result::Result<T, BoxedError>;
 pub enum Error {
     NoResponse,
     NotFound(String),
+    BadRequest(String),
 }
 
 impl std::fmt::Display for Error {
@@ -12,6 +13,7 @@ impl std::fmt::Display for Error {
         match self {
             Error::NoResponse => write!(f, "No response from server"),
             Error::NotFound(err) => write!(f, "Not found: {}", err),
+            Error::BadRequest(err) => write!(f, "Bad Request: {}", err),
         }
     }
 }

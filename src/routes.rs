@@ -1,11 +1,12 @@
 use std::collections::HashMap;
 
+use crate::database::Database;
 use crate::{
     errors,
     http::{Request, Response},
 };
 use errors::Result;
-use matchit::{Router, Match};
+use matchit::Router;
 
 macro_rules! make_paths {
         ($($name:ident: $path:expr,)*) => {
@@ -45,7 +46,8 @@ fn router() -> errors::Result<Router<&'static str>> {
     Ok(router)
 }
 
-type HttpHandler = fn(Request, HashMap<String, String>) -> Result<Response>;
+pub type HttpParams = HashMap<String, String>;
+pub type HttpHandler = fn(Request, HttpParams, &mut dyn Database) -> Result<Response>;
 type MethodToHandler = HashMap<&'static str, HttpHandler>;
 
 pub struct HttpRouter {
@@ -62,17 +64,12 @@ impl HttpRouter {
         })
     }
 
-    pub fn add_route(
-        &mut self,
-        method: &'static str,
-        route: &'static str,
-        handler: HttpHandler,
-    ) -> Option<()> {
+    pub fn add_route(&mut self, method: &'static str, route: &'static str, handler: HttpHandler) {
         let method_to_handler = self.handlers.entry(route).or_insert_with(HashMap::new);
-        method_to_handler.insert(method, handler).map(|_| ())
+        method_to_handler.insert(method, handler);
     }
 
-    pub fn route(&self, request: Request) -> Result<Response> {
+    pub fn route(&self, request: Request, db: &mut dyn Database) -> Result<Response> {
         let route = self
             .routes
             .at(&request.path)
@@ -93,14 +90,19 @@ impl HttpRouter {
                 ))
             })?;
 
-        let params: HashMap<String, String> = route.params.iter().map(|(k, v)| (k.into(), v.into())).collect();
-        handler(request, params)
+        let params: HashMap<String, String> = route
+            .params
+            .iter()
+            .map(|(k, v)| (k.into(), v.into()))
+            .collect();
+        handler(request, params, db)
     }
 }
 
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::database::mock::MockDB;
 
     #[test]
     fn test_routes() {
@@ -145,31 +147,33 @@ mod test {
         const EXPECTED_POST_ORDER: &str = "post_orders";
         const EXPECTED_DELETE_ITEM: &str = "delete_item";
 
+        let mut db = MockDB::new().unwrap();
+
         let mut router = HttpRouter::new().unwrap();
-        router.add_route("GET", endpoints::ORDERS, |_, _| {
+        router.add_route("GET", endpoints::ORDERS, |_, _, _| {
             Ok(Response::ok_with_body(EXPECTED_GET_ORDER.to_string()))
         });
-        router.add_route("POST", endpoints::ORDERS, |_, _| {
+        router.add_route("POST", endpoints::ORDERS, |_, _, _| {
             Ok(Response::ok_with_body(EXPECTED_POST_ORDER.to_string()))
         });
-        router.add_route("DELETE", endpoints::ITEMS, |_, _| {
+        router.add_route("DELETE", endpoints::ITEMS, |_, _, _| {
             Ok(Response::ok_with_body(EXPECTED_DELETE_ITEM.to_string()))
         });
 
-        let response = router.route(Request::get(paths::ORDERS)).unwrap();
+        let response = router.route(Request::get(paths::ORDERS), &mut db).unwrap();
         assert_eq!(response.body, EXPECTED_GET_ORDER);
 
         let response = router
-            .route(Request::post(paths::ORDERS, "".to_string()))
+            .route(Request::post(paths::ORDERS, "".to_string()), &mut db)
             .unwrap();
         assert_eq!(response.body, EXPECTED_POST_ORDER);
 
         assert!(router
-            .route(Request::delete(paths::ORDERS, "".to_string()))
+            .route(Request::delete(paths::ORDERS, "".to_string()), &mut db)
             .is_err());
 
         let response = router
-            .route(Request::delete(paths::ITEMS, "".to_string()))
+            .route(Request::delete(paths::ITEMS, "".to_string()), &mut db)
             .unwrap();
         assert_eq!(response.body, EXPECTED_DELETE_ITEM);
     }
@@ -177,11 +181,18 @@ mod test {
     #[test]
     fn test_route_parameters() {
         let mut router = HttpRouter::new().unwrap();
+        let mut db = MockDB::new().unwrap();
 
-        router.add_route("POST", endpoints::ITEM_BY_ID, |_, params| {
+        router.add_route("POST", endpoints::ITEM_BY_ID, |_, params, _| {
             let order_id = params.get("order_id").unwrap();
             let item_id = params.get("item_id").unwrap();
             Ok(Response::ok_with_body(format!("{}:{}", order_id, item_id)))
         });
+
+        let response = router
+            .route(Request::post("/api/v1/orders/42/items/24", "".to_string()), &mut db)
+            .unwrap();
+
+        assert_eq!(response.body, "42:24");
     }
 }

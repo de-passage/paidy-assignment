@@ -2,7 +2,7 @@ use crate::api::{Item, Order};
 use crate::errors::{Error, Result};
 use rand::Rng;
 
-trait Database {
+pub trait Database {
     fn new() -> Result<Self>
     where
         Self: Sized;
