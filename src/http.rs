@@ -124,6 +124,18 @@ impl Response {
             body: str,
         }
     }
+
+    pub fn error(code: u16) -> Response {
+        Response {
+            status: Some(code),
+            headers: vec![],
+            body: "".to_string(),
+        }
+    }
+
+    pub fn internal_server_error() -> Response {
+        Self::error(500)
+    }
 }
 
 pub fn parse_response<T>(mut buf_reader: BufReader<T>) -> std::option::Option<Response>
@@ -182,7 +194,7 @@ fn respond(stream: &mut TcpStream, resp: Response) {
         format!(
             "HTTP/1.1 {} {}\r\nContent-Length: {}\r\n{}\r\n{}",
             resp.status.unwrap_or(500),
-            from_code(resp.status.unwrap_or(500)),
+            code_to_string(resp.status.unwrap_or(500)),
             resp.body.len(),
             resp.headers
                 .iter()
@@ -204,9 +216,10 @@ pub struct HttpServer {
     listener: TcpListener,
 }
 
-fn from_code(code: u16) -> &'static str {
+pub fn code_to_string(code: u16) -> &'static str {
     match code {
         400 => "Bad Request",
+        404 => "Not Found",
         200 => "OK",
         204 => "No Content",
         500 => "Internal Server Error",

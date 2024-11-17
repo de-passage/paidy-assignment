@@ -8,7 +8,7 @@ pub fn create_http_router() -> Result<HttpRouter> {
     let mut router = HttpRouter::new()?;
 
     router.add_route("POST", endpoints::ORDERS, new_order);
-    router.add_route("GET", endpoints::ITEMS, get_items);
+    router.add_route("GET", endpoints::ORDER_BY_ID, get_items);
     router.add_route("GET", endpoints::ITEM_BY_ID, get_order_item);
     router.add_route("DELETE", endpoints::ITEM_BY_ID, delete_order_item);
 
@@ -35,6 +35,10 @@ fn new_order(req: Request, _: HttpParams, db: &mut dyn Database) -> Result<Respo
         .map_err(|err| Error::BadRequest(err.to_string()))?;
 
     db.insert_orders(body.items, body.table_number)
+        .map(|vec| Order {
+            table_number: body.table_number,
+            items: vec,
+        })
         .and_then(&serialize)
         .map(Response::ok_with_body)
         .and_then(Ok)

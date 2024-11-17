@@ -28,7 +28,7 @@ macro_rules! make_paths {
 make_paths! {
     ORDERS: "/orders",
     ORDER_BY_ID: "/orders/{order_id}",
-    ITEMS: "/orders/{order_id}/items",
+    ITEMS: "/orders/{order_id}/items", // not actually used, but someday maybe
     ITEM_BY_ID: "/orders/{order_id}/items/{item_id}",
 }
 
@@ -38,6 +38,16 @@ macro_rules! add_path{
             $router.insert(paths::$path, endpoints::$path)?;
         )*
     }
+}
+
+pub fn order_by_id(order_id: u32) -> String {
+    paths::ORDER_BY_ID.replace("{order_id}", &order_id.to_string())
+}
+
+pub fn item_by_id(order_id: u32, item_id: u32) -> String {
+    paths::ITEM_BY_ID
+        .replace("{order_id}", &order_id.to_string())
+        .replace("{item_id}", &item_id.to_string())
 }
 
 pub mod params {

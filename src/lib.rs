@@ -5,3 +5,4 @@ pub mod http;
 pub mod threadpool;
 pub mod database;
 pub mod endpoints;
+pub mod cli;
