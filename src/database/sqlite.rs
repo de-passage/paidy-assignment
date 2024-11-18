@@ -21,15 +21,19 @@ pub struct SQLiteConnection {
     /// The connection
     conn: Connection,
 
-    /// The ID to assign to the next order. I'm managing this locally because there doesn't seem to
-    /// be a great way to get the last inserted ID from SQLite in the case of multiple inserts.
+    /// The ID to assign to the next order.
+    ///
+    /// I'm managing this locally because there doesn't seem to be a great way to get the last
+    /// inserted ID from SQLite in the case of multiple inserts.
     current_id: Arc<AtomicU32>,
 }
 
 impl Database for SQLiteConnection {
     fn new() -> Result<Self> {
+        let conn = Connection::open_in_memory()?;
+        conn.execute(sql_queries::CREATE_TABLE, [])?;
         Ok(SQLiteConnection {
-            conn: Connection::open_in_memory()?,
+            conn,
             current_id: Arc::new(AtomicU32::new(0)),
         })
     }
@@ -42,7 +46,7 @@ impl Database for SQLiteConnection {
         self.conn
             .prepare(sql_queries::INSERT_ORDER)
             .unwrap()
-            .execute(params![id, item, table_id])
+            .execute(params![id, item, table_id, time_to_completion])
             .map(|_| Item {
                 id,
                 time_to_completion,
@@ -94,11 +98,7 @@ impl Database for SQLiteConnection {
         )
     }
 
-    fn insert_orders(
-        &mut self,
-        items: Vec<String>,
-        table_id: u32,
-    ) -> crate::errors::Result<Vec<Item>> {
+    fn insert_orders(&mut self, items: Vec<String>, table_id: u32) -> Result<Vec<Item>> {
         let items = items
             .into_iter()
             .map(|item| Item {
@@ -118,8 +118,14 @@ impl Database for SQLiteConnection {
         Ok(items)
     }
 
-    fn delete_item(&mut self, _table_id: u32, _order_id: u32) -> crate::errors::Result<Item> {
-        todo!()
+    fn delete_item(&mut self, _table_id: u32, _order_id: u32) -> Result<Item> {
+        // This can probably be improved to avoid the extra query
+        let item = self.get_order_item(_table_id, _order_id)?;
+        self.conn
+            .prepare(sql_queries::DELETE_ITEM)
+            .unwrap()
+            .execute(params![_table_id, _order_id])?;
+        Ok(item)
     }
 }
 
@@ -134,4 +140,74 @@ fn insert_data(tx: &rusqlite::Transaction, items: &Vec<Item>, table_id: u32) -> 
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    fn compare_items(left: &Item, right: &Item) {
+        assert_eq!(left.name, right.name);
+        assert_eq!(left.time_to_completion, right.time_to_completion);
+        assert_eq!(left.id, right.id);
+    }
+
+    #[test]
+    fn test_insert_order() {
+        let mut db = SQLiteConnection::new().unwrap();
+        let item = db.insert_order("Pizza", 1).unwrap();
+        assert_eq!(item.name, "Pizza");
+        assert!(item.time_to_completion >= 5 && item.time_to_completion <= 15);
+    }
+
+    #[test]
+    fn test_get_order() {
+        let mut db = SQLiteConnection::new().unwrap();
+        db.insert_order("Soda", 2).unwrap();
+        let expected_pizza = db.insert_order("Pizza", 1).unwrap();
+        let expected_burger = db.insert_order("Burger", 1).unwrap();
+        db.insert_order("Sushi", 3).unwrap();
+
+        let order = db.get_order(1).unwrap();
+        assert_eq!(order.items.len(), 2);
+        let result_pizza = order
+            .items
+            .iter()
+            .find(|item| item.name == "Pizza")
+            .unwrap();
+        let result_burger = order
+            .items
+            .iter()
+            .find(|item| item.name == "Burger")
+            .unwrap();
+        compare_items(result_pizza, &expected_pizza);
+        compare_items(result_burger, &expected_burger);
+    }
+
+    #[test]
+    fn test_get_order_item() {
+        let mut db = SQLiteConnection::new().unwrap();
+        db.insert_order("Pizza", 1).unwrap();
+        let burger = db.insert_order("Burger", 1).unwrap();
+
+        let item = db.get_order_item(1, burger.id).unwrap();
+        compare_items(&item, &burger);
+        assert_eq!(item.name, burger.name);
+        assert_eq!(item.id, burger.id);
+        assert_eq!(item.time_to_completion, burger.time_to_completion);
+    }
+
+    #[test]
+    fn test_delete_order_item() {
+        let mut db = SQLiteConnection::new().unwrap();
+        db.insert_order("Pizza", 1).unwrap();
+        let burger = db.insert_order("Burger", 1).unwrap();
+
+        let item = db.delete_item(1, burger.id).unwrap();
+        compare_items(&item, &burger);
+
+        let order = db.get_order(1).unwrap();
+        assert_eq!(order.items.len(), 1);
+        assert_eq!(order.items[0].name, "Pizza");
+    }
 }
