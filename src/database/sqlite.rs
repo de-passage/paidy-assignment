@@ -1,6 +1,6 @@
 use crate::api::{Item, Order};
 use crate::database::Database;
-use crate::errors::{BoxedError, Error, Result};
+use crate::errors::{Error, Result};
 use rand::Rng;
 use rusqlite::{params, Connection};
 use std::sync::{atomic::AtomicU32, Arc};

@@ -1,5 +1,5 @@
 use common::cli;
-use common::database::{mock::MockDB, Database};
+use common::database::{sqlite::SQLiteConnection, Database};
 use common::endpoints;
 use common::errors::*;
 use common::http::{HttpServer, Response};
@@ -12,7 +12,7 @@ fn main() {
 
     let server = HttpServer::new(&addr).unwrap();
     let router = Arc::new(endpoints::create_http_router().unwrap());
-    let db = Arc::new(Mutex::new(MockDB::new().unwrap()));
+    let db = Arc::new(Mutex::new(SQLiteConnection::new().unwrap()));
 
     server.serve(move |request| {
         println!("{:?}", request);
