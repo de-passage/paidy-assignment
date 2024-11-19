@@ -26,7 +26,7 @@ struct CLIOptions {
 fn parse_action(action: String) -> std::result::Result<Action, CLIError> {
     match action.to_ascii_lowercase().as_str() {
         "get" => Ok(Action::Get),
-        "insert" => Ok(Action::Insert),
+        "order" => Ok(Action::Insert),
         "delete" => Ok(Action::Delete),
         _ => Err(CLIError::InvalidParameter),
     }
