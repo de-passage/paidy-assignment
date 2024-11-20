@@ -3,7 +3,7 @@ Simple restaurant API for the Paidy interview process. See requirements [here](h
 
 Built with Rust 1.82.0, no effort was made for backwards compatibility.
 
-Disclosure, I went over the time limit for this assignment (see below), and took liberal inspiration from the [Rust book](https://doc.rust-lang.org/book/ch20-02-multithreaded.html) for the threadpool implementation. I also use Copilot and the occasional ChatGPT for my personal projects, and although I found that the suggestions for Rust are even worse than usual, it still helped me discover information faster than I would have otherwise. My [last project in Rust](https://github.com/de-passage/conduit-rocket.rust) was over 4 years ago, so although I am not a complete beginner I was by and large rediscovering the language.
+Disclosure, I went over the time limit for this assignment (see below), and took liberal inspiration from the [Rust book](https://doc.rust-lang.org/book/ch20-02-multithreaded.html) for the threadpool implementation. I also use Copilot and the occasional ChatGPT for my personal projects, and although I found that the suggestions for Rust are even worse than usual, it still helped me discover information faster than I would have otherwise. My [last project in Rust](https://github.com/de-passage/conduit-rocket.rust) was over 4 years ago, so even though I am not a complete beginner I was by and large rediscovering the language.
 
 ## Running the application
 

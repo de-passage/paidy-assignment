@@ -17,6 +17,8 @@ pub enum Error {
     BadRequest(String),
     /// Something went wrong server-side
     InternalServerError(String),
+    /// A TCP stream was closed unexpectedly
+    ConnectionReset,
 }
 
 impl std::fmt::Display for Error {
@@ -26,6 +28,7 @@ impl std::fmt::Display for Error {
             Error::NotFound(err) => write!(f, "Not found: {}", err),
             Error::BadRequest(err) => write!(f, "Bad Request: {}", err),
             Error::InternalServerError(err) => write!(f, "InternalServerError: {}", err),
+            Error::ConnectionReset => write!(f, "ConnectionReset"),
         }
     }
 }

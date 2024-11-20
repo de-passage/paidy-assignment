@@ -81,8 +81,8 @@ where
 {
     let buf_reader = BufReader::new(&mut stream);
     match parse_request(buf_reader) {
-        Some(req) => respond(&mut stream, handler(req)),
-        None => respond(
+        Ok(req) => respond(&mut stream, handler(req)),
+        Err(_) => respond(
             &mut stream,
             Response {
                 status: Some(400),

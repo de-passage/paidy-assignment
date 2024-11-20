@@ -1,3 +1,4 @@
+use crate::errors::{BoxedError, Result, Error};
 use std::io::{BufReader, Read};
 
 /// Represents an HTTP request.
@@ -61,59 +62,58 @@ impl Request {
 /// struggling getting the lifetimes right around the growing buffer.
 ///
 /// TODO: handle requests bigger than 4096 bytes
-pub fn parse_request<T>(mut buf_reader: BufReader<T>) -> std::option::Option<Request>
+pub fn parse_request<T>(mut buf_reader: BufReader<T>) -> Result<Request>
 where
     T: Sized + Read,
 {
-    let mut headers = [httparse::EMPTY_HEADER; 64];
-    let mut req = httparse::Request::new(&mut headers);
+    let mut buf = [0; 4096];
 
-    let mut buf = [0; 4096]; // Nothing will work if the request is larger than this, but I don't
-                             // have time to solve the lifetime issues that arise if I loop to
-                             // extend a buffer dynamically.
+    loop {
+        let mut headers = [httparse::EMPTY_HEADER; 64];
+        let mut req = httparse::Request::new(&mut headers);
+        let bytes_read = buf_reader.read(&mut buf)?;
 
-    let bytes_read = buf_reader.read(&mut buf).ok()?;
+        if bytes_read == 0 {
+            return Err(Box::new(Error::ConnectionReset)); // TODO: better error type
+        }
 
-    if bytes_read == 0 || bytes_read == buf.len() {
-        return None;
-    }
-
-    match req.parse(&buf) {
-        Ok(httparse::Status::Complete(parsed_len)) => {
-            let length = req
-                .headers
-                .iter()
-                .find(|h| h.name == "Content-Length")
-                .and_then(|length| String::from_utf8_lossy(length.value).parse::<usize>().ok())
-                .unwrap_or(0);
-
-            if parsed_len + length > buf.len() {
-                return None;
-            }
-
-            let body = &buf[parsed_len..parsed_len + length];
-            // Obviously we may be dropping part of the next request. Since I'm not gonna
-            // implement connection pooling this isn't too bad, but definitely
-            // something to improve
-
-            Some(Request {
-                method: req.method.unwrap().to_string(),
-                path: req.path.unwrap().to_string(),
-                headers: req
+        match req.parse(&buf) {
+            Ok(httparse::Status::Complete(parsed_len)) => {
+                let length = req
                     .headers
                     .iter()
-                    .map(|h| {
-                        (
-                            h.name.to_string(),
-                            String::from_utf8_lossy(h.value).to_string(),
-                        )
-                    })
-                    .collect(),
-                body: String::from_utf8_lossy(body).to_string(),
-            })
+                    .find(|h| h.name == "Content-Length")
+                    .and_then(|length| String::from_utf8_lossy(length.value).parse::<usize>().ok())
+                    .unwrap_or(0);
+
+                if parsed_len + length > buf.len() {
+                    return Err("Request too big".into());
+                }
+
+                let body = &buf[parsed_len..parsed_len + length];
+                // Obviously we may be dropping part of the next request. Since I'm not gonna
+                // implement connection pooling this isn't too bad, but definitely
+                // something to improve
+
+                return Ok(Request {
+                    method: req.method.unwrap().to_string(),
+                    path: req.path.unwrap().to_string(),
+                    headers: req
+                        .headers
+                        .iter()
+                        .map(|h| {
+                            (
+                                h.name.to_string(),
+                                String::from_utf8_lossy(h.value).to_string(),
+                            )
+                        })
+                        .collect(),
+                    body: String::from_utf8_lossy(body).to_string(),
+                });
+            }
+            Ok(httparse::Status::Partial) => continue,
+            Err(err) => return Err(BoxedError::from(err)),
         }
-        Ok(httparse::Status::Partial) => None,
-        Err(_) => None,
     }
 }
 
@@ -141,7 +141,7 @@ mod test {
 
         let parsed_req = parse_request(buf_reader);
 
-        assert!(parsed_req.is_none());
+        assert!(parsed_req.is_err());
     }
 
     #[test]
