@@ -1,20 +1,20 @@
 use std::sync::{mpsc, Arc, Mutex};
-use std::thread;
+use std::thread::{Scope, ScopedJoinHandle};
 
 /// Simple threadpool, joining all threads on drop.
 ///
 /// Heavily inspired by the one in the Rust book:
 /// https://doc.rust-lang.org/book/ch20-02-multithreaded.html
-pub struct ThreadPool {
-    workers: Vec<Worker>,
-    sender: Option<mpsc::Sender<Job>>,
+pub struct ThreadPool<'a> {
+    workers: Vec<Worker<'a>>,
+    sender: Option<mpsc::Sender<Job<'a>>>,
 }
 
-impl ThreadPool {
+impl<'a> ThreadPool<'a> {
     /// Create a new ThreadPool with `size` threads.
     ///
     /// 'size' must be greater than 0.
-    pub fn new(size: usize) -> ThreadPool {
+    pub fn new(size: usize, scope: &'a Scope<'a, '_>) -> ThreadPool<'a> {
         assert!(size > 0, "ThreadPool size must be greater than 0");
 
         let mut workers = Vec::with_capacity(size);
@@ -22,7 +22,7 @@ impl ThreadPool {
         let receiver = Arc::new(Mutex::new(receiver));
 
         for _ in 0..size {
-            workers.push(Worker::new(Arc::clone(&receiver)));
+            workers.push(Worker::new(Arc::clone(&receiver), scope));
         }
         ThreadPool {
             workers,
@@ -33,14 +33,14 @@ impl ThreadPool {
     /// Queue a task to run on the threadpool when a worker is available.
     pub fn execute<F>(&self, f: F)
     where
-        F: FnOnce() + Send + 'static,
+        F: FnOnce() + Send + 'a,
     {
         let job = Box::new(f);
         self.sender.as_ref().unwrap().send(job).unwrap();
     }
 }
 
-impl Drop for ThreadPool {
+impl<'a> Drop for ThreadPool<'a> {
     fn drop(&mut self) {
         drop(self.sender.take());
         for worker in &mut self.workers {
@@ -52,17 +52,17 @@ impl Drop for ThreadPool {
 }
 
 /// Type of jobs to be executed by the threadpool.
-type Job = Box<dyn FnOnce() + Send + 'static>;
+type Job<'a> = Box<dyn FnOnce() + Send + 'a>;
 
 /// Worker struct, holding a thread handle.
-struct Worker {
-    handle: Option<thread::JoinHandle<()>>,
+struct Worker<'a> {
+    handle: Option<ScopedJoinHandle<'a, ()>>,
 }
 
 /// Create a new worker that will execute jobs from the given receiver until this one is closed.
-impl Worker {
-    fn new(receiver: Arc<Mutex<mpsc::Receiver<Job>>>) -> Worker {
-        let handle = thread::spawn(move || loop {
+impl<'a> Worker<'a> {
+    fn new(receiver: Arc<Mutex<mpsc::Receiver<Job<'a>>>>, scope: &'a Scope<'a, '_>) -> Worker<'a> {
+        let handle = scope.spawn(move || loop {
             let message = receiver.lock().unwrap().recv();
             match message {
                 Ok(job) => job(),
@@ -78,29 +78,31 @@ impl Worker {
 #[cfg(test)]
 mod test {
     use super::*;
+    use std::thread::{scope,sleep};
 
     #[test]
     fn test_threadpool() {
-        // Put this somewhere else when possible, it's very unlikely that it will fail,
-        // but it's slow and not super reliable (I have seen it fail).
-        let pool = super::ThreadPool::new(10);
-        let results = Arc::new(Mutex::new(Vec::<u64>::new()));
+        scope(|scope| {
+            // Put this somewhere else when possible, it's very unlikely that it will fail,
+            // but it's slow and not super reliable (I have seen it fail).
+            let pool = super::ThreadPool::new(10, scope);
+            let results = Arc::new(Mutex::new(Vec::<u64>::new()));
 
-        for i in 0..10 {
-            let vec_handle = Arc::clone(&results);
-            pool.execute(move || {
-                thread::sleep(std::time::Duration::from_millis(10 - i));
-                vec_handle.lock().unwrap().push(i);
-            });
-        }
+            for i in 0..10 {
+                let vec_handle = Arc::clone(&results);
+                pool.execute(move || {
+                    sleep(std::time::Duration::from_millis(10 - i));
+                    vec_handle.lock().unwrap().push(i);
+                });
+            }
 
-        while results.lock().unwrap().len() < 10 {
-            thread::sleep(std::time::Duration::from_millis(1));
-        }
+            while results.lock().unwrap().len() < 10 {
+                sleep(std::time::Duration::from_millis(1));
+            }
 
-        let results = results.lock().unwrap().clone();
-        assert_eq!(results.len(), 10);
-        assert_eq!(results, vec![9, 8, 7, 6, 5, 4, 3, 2, 1, 0])
+            let results = results.lock().unwrap().clone();
+            assert_eq!(results.len(), 10);
+            assert_eq!(results, vec![9, 8, 7, 6, 5, 4, 3, 2, 1, 0])
+        });
     }
-
 }

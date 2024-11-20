@@ -3,7 +3,7 @@ use common::database::{sqlite::SQLiteConnection, Database};
 use common::endpoints;
 use common::errors::*;
 use common::http::{HttpServer, Response};
-use std::sync::{Arc, Mutex};
+use std::sync::Mutex;
 
 fn main() {
     let addr = std::env::args()
@@ -11,10 +11,10 @@ fn main() {
         .unwrap_or(cli::DEFAULT_ADDRESS.to_string());
 
     let server = HttpServer::new(&addr).unwrap();
-    let router = Arc::new(endpoints::create_http_router().unwrap());
-    let db = Arc::new(Mutex::new(SQLiteConnection::new().unwrap()));
+    let router = endpoints::create_http_router().unwrap();
+    let db = Mutex::new(SQLiteConnection::new().unwrap());
 
-    server.serve(move |request| {
+    server.serve(|request| {
         println!("{:?}", request);
         let result = db
             .lock()

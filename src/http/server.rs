@@ -1,8 +1,8 @@
+use crate::http::{parse_request, Request, Response};
 use crate::{errors, threadpool::ThreadPool};
 use std::io::{BufReader, Write};
 use std::net::{TcpListener, TcpStream};
-use crate::http::{Request,Response,parse_request};
-
+use std::thread::scope;
 
 /// Turn an HTTP error code into its string representation
 ///
@@ -42,20 +42,23 @@ impl HttpServer {
     ///
     /// This function is blocking, with no real way of stopping it (except the socket being
     /// forcefully closed by the OS or the program being killed)
-    pub fn serve<F>(&self, handler: F)
+    pub fn serve<'a, F>(&self, handler: F)
     where
-        F: Fn(Request) -> Response + Send + Sync + 'static + Clone,
+        F: Fn(Request) -> Response + Send + Sync + Clone + 'a,
     {
-        let threadpool = ThreadPool::new(
-            std::thread::available_parallelism()
-                .map(|x| x.into())
-                .unwrap_or(4),
-        );
-        for stream in self.listener.incoming() {
-            let mut stream = stream.unwrap();
-            let handler = handler.clone();
-            threadpool.execute(move || handle_stream(&mut stream, &handler))
-        }
+        scope(|scope| {
+            let threadpool = ThreadPool::new(
+                std::thread::available_parallelism()
+                    .map(|x| x.into())
+                    .unwrap_or(4),
+                scope,
+            );
+            for stream in self.listener.incoming() {
+                let mut stream = stream.unwrap();
+                let handler = handler.clone();
+                threadpool.execute(move || handle_stream(&mut stream, &handler))
+            }
+        });
     }
 
     /// Utility function for one-shot servers.
