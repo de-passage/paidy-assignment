@@ -1,4 +1,4 @@
-use crate::errors::{BoxedError, Result, Error};
+use crate::errors::{BoxedError, Error, Result};
 use std::io::{BufReader, Read};
 
 /// Represents an HTTP request.
@@ -45,7 +45,7 @@ impl Request {
             path: path.to_string(),
         }
     }
-    /// Create a new DELEET request for the given path, with the given body
+    /// Create a new DELETE request for the given path, with the given body
     pub fn delete(path: &str, body: String) -> Request {
         Request {
             method: "DELETE".to_string(),
@@ -67,6 +67,7 @@ where
     T: Sized + Read,
 {
     let mut buf = [0; 4096];
+    let mut buf_str = String::new();
 
     loop {
         let mut headers = [httparse::EMPTY_HEADER; 64];
@@ -77,7 +78,9 @@ where
             return Err(Box::new(Error::ConnectionReset)); // TODO: better error type
         }
 
-        match req.parse(&buf) {
+        buf_str.push_str(&String::from_utf8_lossy(&buf[..bytes_read]));
+
+        match req.parse(&buf_str.as_bytes()) {
             Ok(httparse::Status::Complete(parsed_len)) => {
                 let length = req
                     .headers
@@ -86,18 +89,26 @@ where
                     .and_then(|length| String::from_utf8_lossy(length.value).parse::<usize>().ok())
                     .unwrap_or(0);
 
-                if parsed_len + length > buf.len() {
-                    return Err("Request too big".into());
+                /*
+                while length > buf_str.len() - parsed_len {
+                    let bytes_read = buf_reader.read(&mut buf)?;
+                    if bytes_read == 0 {
+                        return Err(Box::new(Error::ConnectionReset)); // TODO: better error type
+                    }
+                    buf_str.push_str(&String::from_utf8_lossy(&buf[..bytes_read]));
                 }
+                */
 
-                let body = &buf[parsed_len..parsed_len + length];
-                // Obviously we may be dropping part of the next request. Since I'm not gonna
-                // implement connection pooling this isn't too bad, but definitely
-                // something to improve
+                let body = &buf_str[parsed_len..parsed_len + length];
+                // This should be fine for HTTP1.1 since requests are not meant to be sent before
+                // the response from the last is received, although connection pooling + an eager
+                // request would be dropped.
+                // This would be problematic for HTTP2 as we may be dropping part of the next
+                // request in the case of multiplexed requests
 
                 return Ok(Request {
-                    method: req.method.unwrap().to_string(),
-                    path: req.path.unwrap().to_string(),
+                    method: req.method.unwrap_or("GET").to_string(),
+                    path: req.path.unwrap_or("/").to_string(),
                     headers: req
                         .headers
                         .iter()
@@ -108,7 +119,7 @@ where
                             )
                         })
                         .collect(),
-                    body: String::from_utf8_lossy(body).to_string(),
+                    body: body.to_string(),
                 });
             }
             Ok(httparse::Status::Partial) => continue,
@@ -120,6 +131,8 @@ where
 #[cfg(test)]
 mod test {
     use super::*;
+    use rand::Rng;
+
     #[test]
     fn test_parse_simple_request() {
         let req_str = b"GET / HTTP/1.1\r\nHost: localhost:8080\r\nUser-Agent: curl/7.68.0\r\nAccept: */*\r\n\r\n";
@@ -161,5 +174,58 @@ mod test {
         assert_eq!(parsed_req.path, "/");
         assert_eq!(parsed_req.headers.len(), 4);
         assert_eq!(parsed_req.body, body);
+    }
+
+    #[test]
+    fn test_parse_request_with_large_header() {
+        let mut rng = rand::thread_rng();
+        let mut buffer = [0; 4096];
+        for c in buffer.iter_mut() {
+            *c = rng.gen_range('a' as u8..='z' as u8)
+        }
+
+        let req_str = format!(
+            "GET / HTTP/1.1\r\nHost: localhost:8080\r\nUser-Agent: curl/7.68.0\r\nAccept: */*\r\nX-Test: {}\r\n\r\n",
+            String::from_utf8_lossy(&buffer)
+        );
+
+        let buf_reader = BufReader::new(req_str.as_bytes());
+        let parsed_req = parse_request(buf_reader).unwrap();
+
+        assert_eq!(parsed_req.method, "GET");
+        assert_eq!(parsed_req.path, "/");
+        assert_eq!(parsed_req.headers.len(), 4);
+        let x_test = parsed_req
+            .headers
+            .iter()
+            .find(|(k, _)| k == "X-Test")
+            .unwrap();
+        assert_eq!(x_test.1, String::from_utf8_lossy(&buffer).to_string());
+    }
+
+    #[test]
+    fn test_parse_request_with_large_body() {
+        let mut rng = rand::thread_rng();
+        let mut buffer = [0; 4096];
+        for c in buffer.iter_mut() {
+            *c = rng.gen_range('a' as u8..='z' as u8)
+        }
+
+        let req_str = format!(
+            "GET / HTTP/1.1\r\nHost: localhost:8080\r\nUser-Agent: curl/7.68.0\r\nAccept: */*\r\nContent-Length: {}\r\n\r\n{}",
+            buffer.len(),
+            String::from_utf8_lossy(&buffer)
+        );
+
+        let buf_reader = BufReader::new(req_str.as_bytes());
+        let parsed_req = parse_request(buf_reader).unwrap();
+
+        assert_eq!(parsed_req.method, "GET");
+        assert_eq!(parsed_req.path, "/");
+        assert_eq!(parsed_req.headers.len(), 4);
+        assert_eq!(
+            parsed_req.body,
+            String::from_utf8_lossy(&buffer).to_string()
+        );
     }
 }
