@@ -128,7 +128,7 @@ impl HttpRouter {
 
     /// Add a new route to the router
     pub fn add_route(&mut self, method: &'static str, route: &'static str, handler: HttpHandler) {
-        let method_to_handler = self.handlers.entry(route).or_insert_with(HashMap::new);
+        let method_to_handler = self.handlers.entry(route).or_default();
         method_to_handler.insert(method, handler);
     }
 

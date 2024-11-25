@@ -3,7 +3,6 @@ use common::errors::Result;
 use common::http::{code_to_string, HttpClient, Response};
 use common::routes;
 use common::cli::*;
-use serde;
 
 /// Actions that may be performed by the client
 #[derive(Debug)]
@@ -48,12 +47,12 @@ where
         .next()
         .ok_or(CLIError::MissingParameter("target or action"))?;
 
-    let (target, action) = match validate_address(&maybe_target.as_str()) {
+    let (target, action) = match validate_address(maybe_target.as_str()) {
         Ok(target) => (
             target,
             args.next()
                 .ok_or(CLIError::MissingParameter("action"))
-                .and_then(&parse_action)?,
+                .and_then(parse_action)?,
         ),
         Err(_) => (DEFAULT_ADDRESS, parse_action(maybe_target)?),
     };
@@ -113,7 +112,7 @@ fn main() {
 
             if options.orders.is_empty() {
                 let response = client
-                    .send("GET", &routes::order_by_id(table).as_str(), "")
+                    .send("GET", routes::order_by_id(table).as_str(), "")
                     .unwrap();
                 print_response::<api::Order>(&response);
                 return;
@@ -132,7 +131,7 @@ fn main() {
 
             for order in orders {
                 let response = client
-                    .send("GET", &routes::item_by_id(table, order).as_str(), "")
+                    .send("GET", routes::item_by_id(table, order).as_str(), "")
                     .unwrap();
                 print_response::<api::Item>(&response);
             }
@@ -148,7 +147,7 @@ fn main() {
                 .send(
                     "POST",
                     routes::paths::ORDERS,
-                    &serde_json::to_string(&body).unwrap().as_str(),
+                    serde_json::to_string(&body).unwrap().as_str(),
                 )
                 .unwrap();
             print_response::<api::Order>(&response);
@@ -173,7 +172,7 @@ fn main() {
 
             for item in orders {
                 let response = client
-                    .send("DELETE", &routes::item_by_id(table, item).as_str(), "")
+                    .send("DELETE", routes::item_by_id(table, item).as_str(), "")
                     .unwrap();
                 print_response::<api::Item>(&response);
             }

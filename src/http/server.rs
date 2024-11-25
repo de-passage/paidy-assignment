@@ -81,9 +81,9 @@ where
 {
     let buf_reader = BufReader::new(&mut stream);
     match parse_request(buf_reader) {
-        Ok(req) => respond(&mut stream, handler(req)),
+        Ok(req) => respond(stream, handler(req)),
         Err(_) => respond(
-            &mut stream,
+            stream,
             Response {
                 status: Some(400),
                 body: "".to_string(),
@@ -110,8 +110,7 @@ fn respond(stream: &mut TcpStream, resp: Response) {
         .as_bytes(),
     );
 
-    match status {
-        Err(err) => eprintln!("Failed to respond {}", err),
-        _ => (),
+    if let Err(err) = status {
+        eprintln!("Failed to respond {}", err)
     }
 }

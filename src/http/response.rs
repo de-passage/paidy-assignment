@@ -41,7 +41,7 @@ impl Response {
     /// No body is added intentionally to avoid leaking information about the server until I build
     /// some better error handling.
     pub fn error(code: u16) -> Response {
-        assert!(code >= 400 && code < 600, "Invalid error code");
+        assert!((400..600).contains(&code), "Invalid error code");
         Response {
             status: Some(code),
             headers: vec![],
@@ -81,7 +81,7 @@ where
 
         buf_str.push_str(&String::from_utf8_lossy(&buf[..bytes_read]));
 
-        match req.parse(&buf_str.as_bytes()) {
+        match req.parse(buf_str.as_bytes()) {
             Ok(httparse::Status::Complete(parsed_len)) => {
                 let body_len = req
                     .headers
@@ -173,7 +173,7 @@ mod test {
         let mut rng = rand::thread_rng();
         let mut buffer = [0; 4096];
         for c in buffer.iter_mut() {
-            *c = rng.gen_range('a' as u8..='z' as u8)
+            *c = rng.gen_range(b'a'..=b'z')
         }
         let x_test_header = String::from_utf8_lossy(&buffer);
 
@@ -196,7 +196,7 @@ mod test {
         let mut rng = rand::thread_rng();
         let mut buffer = [0; 4096];
         for c in buffer.iter_mut() {
-            *c = rng.gen_range('a' as u8..='z' as u8)
+            *c = rng.gen_range(b'a'..=b'z')
         }
         let body = String::from_utf8_lossy(&buffer);
 
@@ -218,12 +218,12 @@ mod test {
         let mut rng = rand::thread_rng();
         let mut buffer = [0; 40960];
         for c in buffer.iter_mut() {
-            *c = rng.gen_range('a' as u8..='z' as u8)
+            *c = rng.gen_range(b'a'..=b'z')
         }
         let body = String::from_utf8_lossy(&buffer);
         let mut buffer = [0; 40960];
         for c in buffer.iter_mut() {
-            *c = rng.gen_range('a' as u8..='z' as u8)
+            *c = rng.gen_range(b'a'..=b'z')
         }
         let x_test_header = String::from_utf8_lossy(&buffer);
 

@@ -48,9 +48,8 @@ fn new_order(req: Request, _: HttpParams, db: &mut dyn Database) -> Result<Respo
             table_number: body.table_number,
             items: vec,
         })
-        .and_then(&serialize)
+        .and_then(serialize)
         .map(Response::ok_with_body)
-        .and_then(Ok)
 }
 
 /// Handle requests for the items associated to an order (table id)
@@ -58,9 +57,8 @@ fn get_items(_: Request, params: HttpParams, db: &mut dyn Database) -> Result<Re
     let order_id = get_id(&params, params::ORDER_ID)?;
 
     db.get_order(order_id)
-        .and_then(&serialize)
+        .and_then(serialize)
         .map(Response::ok_with_body)
-        .and_then(Ok)
 }
 
 /// Handle requests to fetch a specific item
@@ -69,9 +67,8 @@ fn get_order_item(_: Request, params: HttpParams, db: &mut dyn Database) -> Resu
     let item_id = get_id(&params, params::ITEM_ID)?;
 
     db.get_order_item(order_id, item_id)
-        .and_then(&serialize)
+        .and_then(serialize)
         .map(Response::ok_with_body)
-        .and_then(Ok)
 }
 
 /// Handle requests to delete an item from a table order
@@ -80,9 +77,8 @@ fn delete_order_item(_: Request, params: HttpParams, db: &mut dyn Database) -> R
     let item_id = get_id(&params, params::ITEM_ID)?;
 
     db.delete_item(order_id, item_id)
-        .and_then(&serialize)
+        .and_then(serialize)
         .map(Response::ok_with_body)
-        .and_then(Ok)
 }
 
 #[cfg(test)]
@@ -139,9 +135,9 @@ mod tests {
         let item = to_order(&response).unwrap();
         assert_eq!(item.table_number, 1);
         assert_eq!(item.items.len(), 3);
-        assert!(item.items.iter().find(|i| i.name == "Pizza").is_some());
-        assert!(item.items.iter().find(|i| i.name == "Burger").is_some());
-        assert!(item.items.iter().find(|i| i.name == "Soda").is_some());
+        assert!(item.items.iter().any(|i| i.name == "Pizza"));
+        assert!(item.items.iter().any(|i| i.name == "Burger"));
+        assert!(item.items.iter().any(|i| i.name == "Soda"));
     }
 
     #[test]
@@ -163,8 +159,8 @@ mod tests {
         let order = to_order(&response).unwrap();
         assert_eq!(order.table_number, 1);
         assert_eq!(order.items.len(), 2);
-        assert!(order.items.iter().find(|i| i.name == "Pizza").is_some());
-        assert!(order.items.iter().find(|i| i.name == "Burger").is_some());
+        assert!(order.items.iter().any(|i| i.name == "Pizza"));
+        assert!(order.items.iter().any(|i| i.name == "Burger"));
     }
 
     #[test]

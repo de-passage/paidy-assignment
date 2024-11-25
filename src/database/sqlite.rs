@@ -131,7 +131,7 @@ impl Database for SQLiteConnection {
 
 /// Insert data from a vector of items into the database
 /// This exists only to make the borrow checker happy
-fn insert_data(tx: &rusqlite::Transaction, items: &Vec<Item>, table_id: u32) -> Result<()> {
+fn insert_data(tx: &rusqlite::Transaction, items: &[Item], table_id: u32) -> Result<()> {
     let mut stmt = tx.prepare(sql_queries::INSERT_ORDER)?;
 
     for item in items.iter() {

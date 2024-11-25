@@ -34,7 +34,7 @@ impl std::error::Error for CLIError {}
 /// Returns its input if the address is in the format <host>:<port>, otherwise InvalidUrlFormat
 pub fn validate_address(url: &str) -> std::result::Result<&str, CLIError> {
     let re = Regex::new(r"^[a-zA-Z0-9\.\-]+:\d{1,5}$").unwrap();
-    if re.is_match(&url) {
+    if re.is_match(url) {
         Ok(url)
     } else {
         Err(CLIError::InvalidUrlFormat)

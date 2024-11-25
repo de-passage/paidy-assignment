@@ -4,7 +4,7 @@ use std::io::{BufReader, Read};
 /// Represents an HTTP request.
 ///
 /// This datastructure probably needs to be simplified/split to avoid carrying redundant
-/// information around the application (typically path + params after rounting).
+/// information around the application (typically path + params after routing).
 #[derive(Debug)]
 pub struct Request {
     /// The HTTP method used in the request
@@ -78,7 +78,7 @@ where
 
         buf_str.push_str(&String::from_utf8_lossy(&buf[..bytes_read]));
 
-        match req.parse(&buf_str.as_bytes()) {
+        match req.parse(buf_str.as_bytes()) {
             Ok(httparse::Status::Complete(parsed_len)) => {
                 let body_len = req
                     .headers
@@ -185,7 +185,7 @@ mod test {
         let mut rng = rand::thread_rng();
         let mut buffer = [0; 4096];
         for c in buffer.iter_mut() {
-            *c = rng.gen_range('a' as u8..='z' as u8)
+            *c = rng.gen_range(b'a'..=b'z')
         }
         let x_test_header = String::from_utf8_lossy(&buffer);
 
@@ -213,7 +213,7 @@ mod test {
         let mut rng = rand::thread_rng();
         let mut buffer = [0; 4096];
         for c in buffer.iter_mut() {
-            *c = rng.gen_range('a' as u8..='z' as u8)
+            *c = rng.gen_range(b'a'..=b'z')
         }
         let body = String::from_utf8_lossy(&buffer);
 
@@ -237,12 +237,12 @@ mod test {
         let mut rng = rand::thread_rng();
         let mut buffer = [0; 40960];
         for c in buffer.iter_mut() {
-            *c = rng.gen_range('a' as u8..='z' as u8)
+            *c = rng.gen_range(b'a'..=b'z')
         }
         let body = String::from_utf8_lossy(&buffer);
         let mut buffer = [0; 40960];
         for c in buffer.iter_mut() {
-            *c = rng.gen_range('a' as u8..='z' as u8)
+            *c = rng.gen_range(b'a'..=b'z')
         }
         let x_test_header = String::from_utf8_lossy(&buffer);
 

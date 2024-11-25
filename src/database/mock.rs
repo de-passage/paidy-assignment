@@ -90,7 +90,7 @@ impl Database for MockDB {
     fn get_order_item(&self, table_id: u32, order_id: u32) -> Result<crate::api::Item> {
         self.0
             .iter()
-            .find(|(id, item)| *id == table_id && item.id == order_id as u32)
+            .find(|(id, item)| *id == table_id && item.id == order_id)
             .map(|(_, item)| item.clone())
             .ok_or(
                 Error::NotFound(format!(
@@ -105,7 +105,7 @@ impl Database for MockDB {
         let index = self
             .0
             .iter()
-            .position(|(id, item)| *id == table_id && item.id == order_id as u32)
+            .position(|(id, item)| *id == table_id && item.id == order_id)
             .ok_or(Error::NotFound(format!(
                 "No item with id {} for table {}",
                 order_id, table_id
@@ -129,14 +129,14 @@ mod tests {
         let result = db.get_order(1).unwrap();
         assert_eq!(result.items.len(), 2);
         assert_eq!(result.items[0].name, "Pizza");
-        assert_eq!(result.items[0].id, pizza_id as u32);
+        assert_eq!(result.items[0].id, pizza_id);
         assert_eq!(result.items[1].name, "Pasta");
-        assert_eq!(result.items[1].id, pasta_id as u32);
+        assert_eq!(result.items[1].id, pasta_id);
 
         let result = db.get_order(2).unwrap();
         assert_eq!(result.items.len(), 1);
         assert_eq!(result.items[0].name, "Burger");
-        assert_eq!(result.items[0].id, burger_id as u32);
+        assert_eq!(result.items[0].id, burger_id);
 
         let result = db.get_order(3);
         assert!(result.is_err());
