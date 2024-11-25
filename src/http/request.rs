@@ -60,8 +60,6 @@ impl Request {
 ///
 /// At the moment, this function doesn't handle requests bigger than 4096 bytes because I'm
 /// struggling getting the lifetimes right around the growing buffer.
-///
-/// TODO: handle requests bigger than 4096 bytes
 pub fn parse_request<T>(mut buf_reader: BufReader<T>) -> Result<Request>
 where
     T: Sized + Read,
@@ -124,7 +122,9 @@ where
         if bytes_read == 0 {
             return Err(Box::new(Error::ConnectionReset));
         }
-        buf_str.push_str(&String::from_utf8_lossy(&buf[..bytes_read]));
+
+        // Do we really need that check?
+        buf_str.push_str(std::str::from_utf8(&buf[..bytes_read]).unwrap_or(""));
     }
     let body = &buf_str[parsed_len..parsed_len + body_len];
     request.body = body.to_string();
@@ -266,6 +266,6 @@ mod test {
             .find(|(k, _)| k == "X-TEST")
             .unwrap();
 
-        assert_eq!(x_test.1, String::from_utf8_lossy(&buffer).to_string());
+        assert_eq!(x_test.1, x_test_header);
     }
 }

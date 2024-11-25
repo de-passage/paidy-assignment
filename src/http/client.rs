@@ -35,7 +35,7 @@ impl HttpClient {
         )?;
 
         let buf_reader = BufReader::new(&mut self.stream);
-        parse_response(buf_reader).ok_or(Box::new(errors::Error::NoResponse))
+        parse_response(buf_reader)
     }
 }
 

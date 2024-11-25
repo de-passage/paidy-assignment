@@ -1,5 +1,7 @@
 use std::io::{BufReader, Read};
 
+use crate::errors::{BoxedError, Error, Result};
+
 /// An HTTP response to be sent to a client
 #[derive(Debug)]
 pub struct Response {
@@ -59,61 +61,84 @@ impl Response {
 /// struggling getting the lifetimes right around the growing buffer.
 ///
 /// TODO: handle responses bigger than 4096 bytes
-pub fn parse_response<T>(mut buf_reader: BufReader<T>) -> std::option::Option<Response>
+pub fn parse_response<T>(mut buf_reader: BufReader<T>) -> Result<Response>
 where
     T: Sized + Read,
 {
-    // This is duplicated from above, we could probably make a somewhat generic implementation
-    // but I don't have the time to do it right now
-    let mut headers = [httparse::EMPTY_HEADER; 64];
-    let mut req = httparse::Response::new(&mut headers);
-
+    // This is duplicated from the request implementation, we could probably make a somewhat generic
+    // implementation but I don't have the time to do it right now
     let mut buf = [0; 4096];
+    let mut buf_str = String::new();
 
-    let bytes_read = buf_reader.read(&mut buf).ok()?;
+    let (body_len, parsed_len, mut request) = loop {
+        let mut headers = [httparse::EMPTY_HEADER; 64];
+        let mut req = httparse::Response::new(&mut headers);
+        let bytes_read = buf_reader.read(&mut buf)?;
 
-    if bytes_read == 0 || bytes_read == buf.len() {
-        return None;
-    }
+        if bytes_read == 0 {
+            return Err(Box::new(Error::ConnectionReset)); // TODO: better error type
+        }
 
-    match req.parse(&buf) {
-        Ok(httparse::Status::Complete(parsed_len)) => {
-            let length = req
-                .headers
-                .iter()
-                .find(|h| h.name == "Content-Length")
-                .and_then(|length| String::from_utf8_lossy(length.value).parse::<usize>().ok())
-                .unwrap_or(0);
+        buf_str.push_str(&String::from_utf8_lossy(&buf[..bytes_read]));
 
-            if parsed_len + length > buf.len() {
-                return None;
-            }
-
-            let body = &buf[parsed_len..parsed_len + length];
-
-            Some(Response {
-                status: req.code,
-                headers: req
+        match req.parse(&buf_str.as_bytes()) {
+            Ok(httparse::Status::Complete(parsed_len)) => {
+                let body_len = req
                     .headers
                     .iter()
-                    .map(|h| {
-                        (
-                            h.name.to_string(),
-                            String::from_utf8_lossy(h.value).to_string(),
-                        )
-                    })
-                    .collect(),
-                body: String::from_utf8_lossy(body).to_string(),
-            })
+                    .find(|h| h.name == "Content-Length")
+                    .and_then(|length| String::from_utf8_lossy(length.value).parse::<usize>().ok())
+                    .unwrap_or(0);
+
+                break (
+                    body_len,
+                    parsed_len,
+                    Response {
+                        status: req.code,
+                        headers: req
+                            .headers
+                            .iter()
+                            .map(|h| {
+                                (
+                                    h.name.to_string(),
+                                    String::from_utf8_lossy(h.value).to_string(),
+                                )
+                            })
+                            .collect(),
+                        body: "".to_string(),
+                    },
+                );
+            }
+            Ok(httparse::Status::Partial) => continue,
+            Err(err) => return Err(BoxedError::from(err)),
         }
-        Ok(httparse::Status::Partial) => None,
-        Err(_) => None,
+    };
+
+    // This should be fine for HTTP1.1 since requests are not meant to be sent before
+    // the response from the last is received, although connection pooling + an eager
+    // request would be dropped.
+    // This would be problematic for HTTP2 as we may be dropping part of the next
+    // request in the case of multiplexed requests
+    while body_len > buf_str.len() - parsed_len {
+        let bytes_read = buf_reader.read(&mut buf)?;
+        if bytes_read == 0 {
+            return Err(Box::new(Error::ConnectionReset));
+        }
+
+        // Do we really need that check?
+        buf_str.push_str(std::str::from_utf8(&buf[..bytes_read]).unwrap_or(""));
     }
+    let body = &buf_str[parsed_len..parsed_len + body_len];
+    request.body = body.to_string();
+
+    Result::Ok(request)
 }
 
 #[cfg(test)]
 mod test {
     use super::*;
+    use rand::Rng;
+
     #[test]
     fn test_parse_simple_response() {
         let req_str = b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n";
@@ -141,5 +166,85 @@ mod test {
         assert_eq!(parsed_req.status, Some(200));
         assert_eq!(parsed_req.headers.len(), 1);
         assert_eq!(parsed_req.body, body);
+    }
+
+    #[test]
+    fn test_parse_response_with_large_header() {
+        let mut rng = rand::thread_rng();
+        let mut buffer = [0; 4096];
+        for c in buffer.iter_mut() {
+            *c = rng.gen_range('a' as u8..='z' as u8)
+        }
+        let x_test_header = String::from_utf8_lossy(&buffer);
+
+        let resp_str = format!("HTTP/1.1 200 OK\r\nX-Test: {}\r\n\r\n", x_test_header);
+
+        let buf_reader = BufReader::new(resp_str.as_bytes());
+        let parsed_resp = parse_response(buf_reader).unwrap();
+
+        assert_eq!(parsed_resp.headers.len(), 1);
+        let x_test = parsed_resp
+            .headers
+            .iter()
+            .find(|(k, _)| k == "X-Test")
+            .unwrap();
+        assert_eq!(x_test.1, x_test_header.to_string());
+    }
+
+    #[test]
+    fn test_parse_response_with_large_body() {
+        let mut rng = rand::thread_rng();
+        let mut buffer = [0; 4096];
+        for c in buffer.iter_mut() {
+            *c = rng.gen_range('a' as u8..='z' as u8)
+        }
+        let body = String::from_utf8_lossy(&buffer);
+
+        let resp_str = format!(
+            "HTTP/1.1 200 OK\r\nContent-Length: {}\r\n\r\n{}",
+            buffer.len(),
+            body
+        );
+
+        let buf_reader = BufReader::new(resp_str.as_bytes());
+        let parsed_resp = parse_response(buf_reader).unwrap();
+
+        assert_eq!(parsed_resp.headers.len(), 1);
+        assert_eq!(parsed_resp.body, body);
+    }
+
+    #[test]
+    fn test_parse_response_with_very_large_body_and_header() {
+        let mut rng = rand::thread_rng();
+        let mut buffer = [0; 40960];
+        for c in buffer.iter_mut() {
+            *c = rng.gen_range('a' as u8..='z' as u8)
+        }
+        let body = String::from_utf8_lossy(&buffer);
+        let mut buffer = [0; 40960];
+        for c in buffer.iter_mut() {
+            *c = rng.gen_range('a' as u8..='z' as u8)
+        }
+        let x_test_header = String::from_utf8_lossy(&buffer);
+
+        let resp_str = format!(
+            "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nX-TEST: {}\r\n\r\n{}",
+            buffer.len(),
+            x_test_header,
+            body
+        );
+
+        let buf_reader = BufReader::new(resp_str.as_bytes());
+        let parsed_resp = parse_response(buf_reader).unwrap();
+
+        assert_eq!(parsed_resp.headers.len(), 2);
+        assert_eq!(parsed_resp.body, body);
+        let x_test = parsed_resp
+            .headers
+            .iter()
+            .find(|(k, _)| k == "X-TEST")
+            .unwrap();
+
+        assert_eq!(x_test.1, x_test_header);
     }
 }
